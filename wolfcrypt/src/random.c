@@ -169,10 +169,6 @@ int wc_RNG_GenerateByte(WC_RNG* rng, byte* b)
     #endif
 #endif
 
-#if defined(WOLFSSL_SILABS_SE_ACCEL)
-#include <wolfssl/wolfcrypt/port/silabs/silabs_random.h>
-#endif
-
 
 #if defined(HAVE_INTEL_RDRAND) || defined(HAVE_INTEL_RDSEED)
     static word32 intel_flags = 0;
@@ -917,9 +913,6 @@ int wc_RNG_GenerateBlock(WC_RNG* rng, byte* output, word32 sz)
     if (rng == NULL || output == NULL)
         return BAD_FUNC_ARG;
 
-    if (sz == 0)
-        return 0; 
-
 #ifdef WOLF_CRYPTO_CB
     if (rng->devId != INVALID_DEVID) {
         ret = wc_CryptoCb_RandomBlock(rng, output, sz);
@@ -934,9 +927,7 @@ int wc_RNG_GenerateBlock(WC_RNG* rng, byte* output, word32 sz)
         return wc_GenerateRand_IntelRD(NULL, output, sz);
 #endif
 
-#if defined(WOLFSSL_SILABS_SE_ACCEL) && defined(WOLFSSL_SILABS_TRNG)
-    return silabs_GenerateRand(output, sz);
-#endif
+
 
 #if defined(WOLFSSL_ASYNC_CRYPT)
     if (rng->asyncDev.marker == WOLFSSL_ASYNC_MARKER_RNG) {
@@ -1919,13 +1910,6 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
         #define USE_TEST_GENSEED
     #endif /* FREESCALE_K70_RNGA */
 
-#elif defined(WOLFSSL_SILABS_SE_ACCEL)
-    int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
-    {
-        (void)os;
-        return silabs_GenerateRand(output, sz);
-    }
-
 #elif defined(STM32_RNG)
      /* Generate a RNG seed using the hardware random number generator
       * on the STM32F2/F4/F7/L4. */
@@ -1957,7 +1941,7 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
                 ((wolfssl_word)&output[i] % sizeof(word32)) != 0
             ) {
                 /* Single byte at a time */
-                word32 tmpRng = 0;
+                uint32_t tmpRng = 0;
                 if (HAL_RNG_GenerateRandomNumber(&hrng, &tmpRng) != HAL_OK) {
                     wolfSSL_CryptHwMutexUnLock();
                     return RAN_BLOCK_E;
@@ -1966,7 +1950,7 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
             }
             else {
                 /* Use native 32 instruction */
-                if (HAL_RNG_GenerateRandomNumber(&hrng, (word32*)&output[i]) != HAL_OK) {
+                if (HAL_RNG_GenerateRandomNumber(&hrng, (uint32_t*)&output[i]) != HAL_OK) {
                     wolfSSL_CryptHwMutexUnLock();
                     return RAN_BLOCK_E;
                 }
@@ -2169,9 +2153,9 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
     int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
     {
         int remaining = sz, length, pos = 0;
-        word32 err_code;
-        byte available;
-        static byte initialized = 0;
+        uint32_t err_code;
+        uint8_t available;
+        static uint8_t initialized = 0;
 
         (void)os;
 
@@ -2410,10 +2394,10 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
     int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
     {
         int ret;
-        word32 buffer[4];
+        uint32_t buffer[4];
 
         while (sz > 0) {
-            word32 len = sizeof(buffer);
+            uint32_t len = sizeof(buffer);
 
             if (sz < len) {
                 len = sz;
@@ -2439,9 +2423,9 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
 
     int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
     {
-        word32 ret;
-        word32 blocks;
-        word32 len = sz;
+        uint32_t ret;
+        uint32_t blocks;
+        word32   len = sz;
 
         ret = WOLFSSL_SCE_TRNG_HANDLE.p_api->open(WOLFSSL_SCE_TRNG_HANDLE.p_ctrl,
                                                   WOLFSSL_SCE_TRNG_HANDLE.p_cfg);
@@ -2450,28 +2434,28 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
             return -1;
         }
 
-        blocks = sz / sizeof(word32);
+        blocks = sz / sizeof(uint32_t);
         if (blocks > 0) {
             ret = WOLFSSL_SCE_TRNG_HANDLE.p_api->read(WOLFSSL_SCE_TRNG_HANDLE.p_ctrl,
-                                                       (word32*)output, blocks);
+                                                      (uint32_t*)output, blocks);
             if (ret != SSP_SUCCESS) {
                 return -1;
             }
         }
 
-        len = len - (blocks * sizeof(word32));
+        len = len - (blocks * sizeof(uint32_t));
         if (len > 0) {
-            word32 tmp;
+            uint32_t tmp;
 
-            if (len > sizeof(word32)) {
+            if (len > sizeof(uint32_t)) {
                 return -1;
             }
             ret = WOLFSSL_SCE_TRNG_HANDLE.p_api->read(WOLFSSL_SCE_TRNG_HANDLE.p_ctrl,
-                                                      (word32*)tmp, 1);
+                                                      (uint32_t*)tmp, 1);
             if (ret != SSP_SUCCESS) {
                 return -1;
             }
-            XMEMCPY(output + (blocks * sizeof(word32)), (byte*)&tmp, len);
+            XMEMCPY(output + (blocks * sizeof(uint32_t)), (byte*)&tmp, len);
         }
 
         ret = WOLFSSL_SCE_TRNG_HANDLE.p_api->close(WOLFSSL_SCE_TRNG_HANDLE.p_ctrl);
@@ -2552,7 +2536,20 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
             }
             return 0;
         }
-
+#elif defined(WOLFSSL_SE050)
+     #include <wolfssl/wolfcrypt/port/nxp/se050_port.h>
+    
+    int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz){
+        int ret = 0;
+        
+        (void)os;
+        if(output == NULL) {
+            return BUFFER_E;
+        }
+        ret = se050_get_random_number(sz, output);
+        return ret;
+    }
+    
 #elif defined(NO_DEV_RANDOM)
 
     #error "you need to write an os specific wc_GenerateSeed() here"

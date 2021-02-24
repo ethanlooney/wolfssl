@@ -134,7 +134,6 @@ where 0 <= L < 2^64.
 
 #elif defined(WOLFSSL_PSOC6_CRYPTO)
 
-
 #else
 
 #include <wolfssl/wolfcrypt/logging.h>
@@ -181,8 +180,7 @@ where 0 <= L < 2^64.
     !defined(WOLFSSL_AFALG_HASH) && !defined(WOLFSSL_DEVCRYPTO_HASH) && \
     (!defined(WOLFSSL_ESP32WROOM32_CRYPT) || defined(NO_WOLFSSL_ESP32WROOM32_CRYPT_HASH)) && \
     (!defined(WOLFSSL_RENESAS_TSIP_CRYPT) || defined(NO_WOLFSSL_RENESAS_TSIP_HASH)) && \
-    !defined(WOLFSSL_PSOC6_CRYPTO) && !defined(WOLFSSL_IMXRT_DCP) && !defined(WOLFSSL_SILABS_SE_ACCEL)
-
+    !defined(WOLFSSL_PSOC6_CRYPTO) && !defined(WOLFSSL_IMXRT_DCP)
 
 static int InitSha256(wc_Sha256* sha256)
 {
@@ -461,7 +459,7 @@ static int InitSha256(wc_Sha256* sha256)
     #ifdef FREESCALE_MMCAU_CLASSIC_SHA
         cau_sha256_initialize_output(sha256->digest);
     #else
-        MMCAU_SHA256_InitializeOutput((word32*)sha256->digest);
+        MMCAU_SHA256_InitializeOutput((uint32_t*)sha256->digest);
     #endif
         wolfSSL_CryptHwMutexUnLock();
 
@@ -719,8 +717,48 @@ static int InitSha256(wc_Sha256* sha256)
     #include <wolfssl/wolfcrypt/port/nxp/dcp_port.h>
     /* implemented in wolfcrypt/src/port/nxp/dcp_port.c */
 
-#elif defined(WOLFSSL_SILABS_SE_ACCEL)
-    /* implemented in wolfcrypt/src/port/silabs/silabs_hash.c */
+//#elif defined(WOLFSSL_SE050)
+
+    /*#include <wolfssl/wolfcrypt/port/nxp/se050_port.h>
+    //#include "fsl_sss_api.h"
+    int wc_InitSha256_ex(wc_Sha256* sha256, void* heap, int devId)
+    {
+        if (sha256 == NULL) {
+            return BAD_FUNC_ARG;
+        }
+
+
+
+        return se050_hash_init((wolfssl_SE050_Hash *)sha256, heap, devId);
+    }
+
+    int wc_Sha256Update(wc_Sha256* sha256, const byte* data, word32 len)
+    {
+        return se050_hash_update((wolfssl_SE050_Hash *)sha256, data, len);
+    }
+
+    int wc_Sha256Final(wc_Sha256* sha256, byte* hash)
+    {
+        int ret = 0;
+        size_t digestLen = WC_SHA_DIGEST_SIZE;
+        
+        ret = se050_hash_final((wolfssl_SE050_Hash *)sha256, hash, digestLen,
+                                kAlgorithm_SSS_SHA256);
+        if (ret != 0)
+            return ret;
+        return wc_InitSha256_ex(sha256, NULL, INVALID_DEVID);
+        
+    }
+    int wc_Sha256FinalRaw(wc_Sha256* sha256, byte* hash)
+    {
+        int ret = 0;
+        size_t digestLen = WC_SHA_DIGEST_SIZE;
+        ret = se050_hash_final((wolfssl_SE050_Hash *)sha256, hash, digestLen,
+                                kAlgorithm_SSS_SHA256);
+        if (ret != 0)
+            return ret;
+        return wc_InitSha256_ex(sha256, NULL, INVALID_DEVID);
+    }*/
 
 #else
     #define NEED_SOFT_SHA256
@@ -1094,7 +1132,7 @@ static int InitSha256(wc_Sha256* sha256)
     #endif
 
         /* save remainder */
-        if (ret == 0 && len > 0) {
+        if (len > 0) {
             XMEMCPY(local, data, len);
             sha256->buffLen = len;
         }
@@ -1362,9 +1400,6 @@ static int InitSha256(wc_Sha256* sha256)
 #elif defined(WOLFSSL_DEVCRYPTO_HASH)
     /* implemented in wolfcrypt/src/port/devcrypto/devcrypt_hash.c */
 
-#elif defined(WOLFSSL_SILABS_SE_ACCEL)
-    /* implemented in wolfcrypt/src/port/silabs/silabs_hash.c */
-
 #else
 
     #define NEED_SOFT_SHA224
@@ -1507,6 +1542,9 @@ static int InitSha256(wc_Sha256* sha256)
     #ifdef WOLFSSL_PIC32MZ_HASH
         wc_Sha256Pic32Free(sha224);
     #endif
+    /*#ifdef WOLFSSL_SE050
+    se050_hash_free((wolfssl_SE050_Hash *)sha);
+    #endif*/
     }
 #endif /* WOLFSSL_SHA224 */
 
@@ -1594,11 +1632,6 @@ void wc_Sha256Free(wc_Sha256* sha256)
         dst->W = NULL;
     #endif
 
-    #ifdef WOLFSSL_SILABS_SE_ACCEL
-        dst->silabsCtx.hash_ctx.cmd_ctx = &(dst->silabsCtx.cmd_ctx);
-        dst->silabsCtx.hash_ctx.hash_type_ctx = &(dst->silabsCtx.hash_type_ctx);
-    #endif
-
     #ifdef WOLFSSL_ASYNC_CRYPT
         ret = wolfAsync_DevCopy(&src->asyncDev, &dst->asyncDev);
     #endif
@@ -1684,11 +1717,6 @@ int wc_Sha256Copy(wc_Sha256* src, wc_Sha256* dst)
     XMEMCPY(dst, src, sizeof(wc_Sha256));
 #ifdef WOLFSSL_SMALL_STACK_CACHE
     dst->W = NULL;
-#endif
-
-#ifdef WOLFSSL_SILABS_SE_ACCEL
-    dst->silabsCtx.hash_ctx.cmd_ctx = &(dst->silabsCtx.cmd_ctx);
-    dst->silabsCtx.hash_ctx.hash_type_ctx = &(dst->silabsCtx.hash_type_ctx);
 #endif
 
 #ifdef WOLFSSL_ASYNC_CRYPT
